@@ -65,6 +65,13 @@ namespace AwsLese
 
             IsReading = false;
 
+            chart1.GetToolTipText += this.chart1_GetToolTipText;
+            AverageTemperatureChart.GetToolTipText += this.chart1_GetToolTipText;
+            AveragePressureChart.GetToolTipText += this.chart1_GetToolTipText;
+            AverageHumidityChart.GetToolTipText += this.chart1_GetToolTipText;
+            AverageLuxChart.GetToolTipText += this.chart1_GetToolTipText;
+            TemperaturePressureScatterChart.GetToolTipText += this.chart1_GetToolTipText;
+
             chart1.ChartAreas[0].AxisY.Minimum = -1.0;
             chart1.ChartAreas[0].AxisY.Maximum = 1.0;
             chart1.ChartAreas[0].AxisY.MajorTickMark.Interval = 0.1;
@@ -546,5 +553,16 @@ namespace AwsLese
             richTextBox1.Invoke(x);
         }
 
+        private void chart1_GetToolTipText(object sender, ToolTipEventArgs e)
+        {
+            // Check selected chart element and set tooltip text for it
+            switch (e.HitTestResult.ChartElementType)
+            {
+                case ChartElementType.DataPoint:
+                    var dataPoint = e.HitTestResult.Series.Points[e.HitTestResult.PointIndex];
+                    e.Text = string.Format("X: {0}   Y: {1}", dataPoint.XValue, dataPoint.YValues[0]);
+                    break;
+            }
+        }
     }
 }
