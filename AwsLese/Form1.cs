@@ -22,8 +22,6 @@ namespace AwsLese
 {
     public partial class Form1 : Form, IDebugObserver
     {
-        static string bucketName = "lese-temperature-pressure";
-        static IAmazonS3 client;
         private Queue<TPCorrelation> _dataQueue;
         private Queue<TPAverage> _dataQueueAvg;
         private static object _lockObject;
@@ -55,22 +53,18 @@ namespace AwsLese
             _dataQueue = new Queue<TPCorrelation>();
             _dataQueueAvg = new Queue<TPAverage>();
 
-            values1.ListChanged += valuesChanged;
-            //values2.ListChanged += valuesChanged;
-            //values3.ListChanged += valuesChanged;
-
             bindingList.Add(values1);
             bindingList.Add(values2);
             bindingList.Add(values3);
 
             IsReading = false;
 
-            chart1.GetToolTipText += this.chart1_GetToolTipText;
-            AverageTemperatureChart.GetToolTipText += this.chart1_GetToolTipText;
-            AveragePressureChart.GetToolTipText += this.chart1_GetToolTipText;
-            AverageHumidityChart.GetToolTipText += this.chart1_GetToolTipText;
-            AverageLuxChart.GetToolTipText += this.chart1_GetToolTipText;
-            TemperaturePressureScatterChart.GetToolTipText += this.chart1_GetToolTipText;
+            chart1.GetToolTipText += chart1_GetToolTipText;
+            AverageTemperatureChart.GetToolTipText += chart1_GetToolTipText;
+            AveragePressureChart.GetToolTipText += chart1_GetToolTipText;
+            AverageHumidityChart.GetToolTipText += chart1_GetToolTipText;
+            AverageLuxChart.GetToolTipText += chart1_GetToolTipText;
+            TemperaturePressureScatterChart.GetToolTipText += chart1_GetToolTipText;
 
             chart1.ChartAreas[0].AxisY.Minimum = -1.0;
             chart1.ChartAreas[0].AxisY.Maximum = 1.0;
@@ -166,28 +160,36 @@ namespace AwsLese
                 chart1.Series[1].Points.DataBindY(values2);
                 chart1.Series[2].Points.DataBindY(values3);
 
+                double tmin = 0;
+                double tmax = 0;
+                double pmin = 0;
+                double pmax = 0;
+                if (valuesAvg1.Count > 0)
+                {
+                    tmin = Math.Floor(valuesAvg1.Min());
+                    tmax = Math.Ceiling(valuesAvg1.Max());
+                    AverageTemperatureChart.ChartAreas[0].AxisY.Minimum = tmin;
+                    AverageTemperatureChart.ChartAreas[0].AxisY.Maximum = tmax;
+                }
+                if (valuesAvg2.Count > 0)
+                {
+                    pmin = Math.Floor(valuesAvg2.Min());
+                    pmax = Math.Ceiling(valuesAvg2.Max());
+                    AveragePressureChart.ChartAreas[0].AxisY.Minimum = pmin;
+                    AveragePressureChart.ChartAreas[0].AxisY.Maximum = pmax;
+                }
                 AverageTemperatureChart.Series[0].Points.DataBindY(valuesAvg1);
                 AveragePressureChart.Series[0].Points.DataBindY(valuesAvg2);
                 AverageHumidityChart.Series[0].Points.DataBindY(valuesAvg3);
                 AverageLuxChart.Series[0].Points.DataBindY(valuesAvg4);
 
-                if (valuesAvg1.Count > valuesAvg2.Count)
+                if (valuesAvg1.Count > 100 && valuesAvg2.Count > 100 && valuesAvg1.Count == valuesAvg2.Count)
                 {
-                    while (valuesAvg1 != valuesAvg2 && valuesAvg1.Count > 0)
-                    {
-                        valuesAvg1.RemoveAt(0);
-                    }
-                }
-                else if (valuesAvg1.Count < valuesAvg2.Count)
-                {
-                    while (valuesAvg1 != valuesAvg2 && valuesAvg2.Count > 0)
-                    {
-                        valuesAvg2.RemoveAt(0);
-                    }
-                }
+                    TemperaturePressureScatterChart.ChartAreas[0].AxisY.Minimum = tmin;
+                    TemperaturePressureScatterChart.ChartAreas[0].AxisY.Maximum = tmax;
+                    TemperaturePressureScatterChart.ChartAreas[0].AxisX.Minimum = pmin;
+                    TemperaturePressureScatterChart.ChartAreas[0].AxisX.Maximum = pmax;
 
-                if (valuesAvg1.Count == valuesAvg2.Count)
-                {
                     TemperaturePressureScatterChart.Series[0].Points.DataBindXY(valuesAvg2, valuesAvg1);
                 }
             };
@@ -219,55 +221,8 @@ namespace AwsLese
             }
         }
 
-        private string ReadObjectData()
-        {
-            string responseBody = "";
-
-            using (client = new AmazonS3Client(_credentials, Amazon.RegionEndpoint.USWest2))
-            {
-                ListBucketsResponse lbr = client.ListBuckets();
-
-                IList<string> objectKeys = client.GetAllObjectKeys(bucketName, "2017", null);
-                foreach (string keyName in objectKeys)
-                {
-                    try
-                    {
-                        GetObjectRequest request = new GetObjectRequest
-                        {
-                            BucketName = bucketName,
-                            Key = keyName
-                        };
-                    
-                        using (GetObjectResponse response = client.GetObject(request))
-                        {
-                            using (Stream responseStream = response.ResponseStream)
-                            {
-                                using (StreamReader reader = new StreamReader(responseStream))
-                                {
-                                    string title = response.Metadata["x-amz-meta-title"];
-                                    Console.WriteLine("The object's title is {0}", title);
-
-                                    responseBody = reader.ReadToEnd();
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine(ex.ToString());
-                    }
-                }
-            }
-            return responseBody;
-        }
-
         private void Read()
         {
-            Action updateData = () =>
-            {
-                UpdateData();
-            };
-
             Action updateChart = () =>
             {
                 UpdateChart();
@@ -275,7 +230,6 @@ namespace AwsLese
 
             _tpCorrelationConsumer.Start();
             _tpAverageConsumer.Start();
-            // Task.Factory.StartNew(updateData);
             Task.Factory.StartNew(updateChart);
         }
 
@@ -317,6 +271,7 @@ namespace AwsLese
                             list.RemoveAt(0);
                         }
                         list.Add(tpCorrelation.correlation_coefficient.Value);
+                        handleValuesChanged();
                     }
 
                     if (tpCorrelation.ts.HasValue)
@@ -361,151 +316,12 @@ namespace AwsLese
                             list.RemoveAt(0);
                         }
                         list.Add(tpAverage.average.Value);
+                        handleValuesChanged();
                     }
                 }
             }
         }
 
-        private void UpdateData()
-        {
-            using (IAmazonKinesis klient = new AmazonKinesisClient(_credentials, Amazon.RegionEndpoint.USWest2))
-            {
-                ListStreamsResponse resp = klient.ListStreams();
-                DescribeStreamRequest describeRequest = new DescribeStreamRequest();
-                string kinesisStreamName = "lese_temperature_pressure_json";
-                describeRequest.StreamName = kinesisStreamName;
-
-                DescribeStreamResponse describeResponse = klient.DescribeStream(describeRequest);
-                List<Shard> shards = describeResponse.StreamDescription.Shards;
-
-                foreach (Shard shard in shards)
-                {
-                    GetShardIteratorRequest iteratorRequest = new GetShardIteratorRequest();
-                    iteratorRequest.StreamName = kinesisStreamName;
-                    iteratorRequest.ShardId = shard.ShardId;
-                    iteratorRequest.ShardIteratorType = ShardIteratorType.TRIM_HORIZON;
-
-                    GetShardIteratorResponse iteratorResponse = klient.GetShardIterator(iteratorRequest);
-                    string iteratorId = iteratorResponse.ShardIterator;
-
-                    while (IsReading && !string.IsNullOrEmpty(iteratorId))
-                    {
-                        Thread.Sleep(1);
-                        GetRecordsRequest getRequest = new GetRecordsRequest();
-                        getRequest.Limit = 10000;
-                        getRequest.ShardIterator = iteratorId;
-
-                        GetRecordsResponse getResponse = klient.GetRecords(getRequest);
-                        string nextIterator = getResponse.NextShardIterator;
-                        List<Record> records = getResponse.Records;
-
-                        if (records.Count > 0)
-                        {
-                            // Console.WriteLine("Received {0} records. ", records.Count);
-                            foreach (Record record in records)
-                            {
-                                if (!IsReading)
-                                {
-                                    break;
-                                }
-                                Thread.Sleep(1);
-                                string json = Encoding.UTF8.GetString(record.Data.ToArray());
-                                // Console.WriteLine("Json string: " + json);
-                                TPCorrelation tpCorr = JsonConvert.DeserializeObject<TPCorrelation>(json);
-                                lock (_lockObject)
-                                {
-                                    _dataQueue.Enqueue(tpCorr);
-                                }
-                            }
-                        }
-                        iteratorId = nextIterator;
-                    }
-
-                    if (!IsReading)
-                    {
-                        break;
-                    }
-
-                }
-            }
-
-            #region Bucket Stuff
-            //using (client = new AmazonS3Client(cred, Amazon.RegionEndpoint.USWest2))
-            //{
-            //    ListBucketsResponse lbr = client.ListBuckets();
-
-            //    IList<string> objectKeys = client.GetAllObjectKeys(_bucketName, "2017", null);
-            //    foreach (string keyName in objectKeys)
-            //    {
-            //        try
-            //        {
-            //            if (!_bucketKeys.Contains(keyName))
-            //            {
-            //                _bucketKeys.Add(keyName);
-
-            //                GetObjectRequest request = new GetObjectRequest
-            //                {
-            //                    BucketName = _bucketName,
-            //                    Key = keyName
-            //                };
-
-            //                using (GetObjectResponse response = client.GetObject(request))
-            //                {
-            //                    using (Stream responseStream = response.ResponseStream)
-            //                    {
-            //                        using (StreamReader reader = new StreamReader(responseStream))
-            //                        {
-            //                            responseBody = reader.ReadToEnd();
-            //                            string[] lines = responseBody.Split(new char[] { '\n' });
-            //                            foreach (string line in lines)
-            //                            {
-            //                                string[] data = line.Split(new char[] { ',' });
-            //                                if (data.Length == 5)
-            //                                {
-            //                                    TP tp = new TP()
-            //                                    {
-            //                                        CorrelationCoefficient = GetFloat(data[2]),
-            //                                        Temperature = GetFloat(data[3]),
-            //                                        Pressure = GetFloat(data[4])
-            //                                    };
-            //                                    lock (_lockObject)
-            //                                    {
-            //                                        _dataQueue.Enqueue(tp);
-            //                                    }
-            //                                    Console.WriteLine("Adding to queue...");
-            //                                }
-            //                                Thread.Sleep(1);
-            //                            }
-            //                        }
-            //                    }
-            //                }
-            //            }
-            //        }
-            //        catch (Exception ex)
-            //        {
-            //            Console.WriteLine(ex.ToString());
-            //        }
-            //    }
-            //}
-            #endregion
-        }
-
-        private float GetFloat(string s)
-        {
-            float result = 0f;
-            if (s != null)
-            {
-                float.TryParse(s, out result);
-            }
-            return result;
-        }
-
-        class TP
-        {
-            public float CorrelationCoefficient { get; set; }
-            public float Temperature { get; set; }
-            public float Pressure { get; set; }
-        }
         class TPCorrelation
         {
             public DateTime? ts { get; set; }
