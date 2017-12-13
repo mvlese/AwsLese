@@ -79,6 +79,8 @@
             this.rbEndOfStream = new System.Windows.Forms.RadioButton();
             this.rbStartOfStream = new System.Windows.Forms.RadioButton();
             this.btnClear = new System.Windows.Forms.Button();
+            this.updownFrequency = new System.Windows.Forms.NumericUpDown();
+            this.label2 = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.chart1)).BeginInit();
             this.tabControl1.SuspendLayout();
             this.tabPage1.SuspendLayout();
@@ -443,11 +445,34 @@
             this.btnClear.UseVisualStyleBackColor = true;
             this.btnClear.Click += new System.EventHandler(this.btnClear_Click);
             // 
+            // updownFrequency
+            // 
+            this.updownFrequency.Location = new System.Drawing.Point(449, 538);
+            this.updownFrequency.Maximum = new decimal(new int[] {
+            15,
+            0,
+            0,
+            0});
+            this.updownFrequency.Name = "updownFrequency";
+            this.updownFrequency.Size = new System.Drawing.Size(39, 20);
+            this.updownFrequency.TabIndex = 9;
+            // 
+            // label2
+            // 
+            this.label2.AutoSize = true;
+            this.label2.Location = new System.Drawing.Point(491, 541);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(229, 13);
+            this.label2.TabIndex = 10;
+            this.label2.Text = "Update Frequency (Minutes) for Start of Stream";
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(959, 561);
+            this.Controls.Add(this.label2);
+            this.Controls.Add(this.updownFrequency);
             this.Controls.Add(this.btnClear);
             this.Controls.Add(this.groupBox1);
             this.Controls.Add(this.checkBox1);
@@ -508,6 +533,8 @@
         private System.Windows.Forms.RadioButton rbEndOfStream;
         private System.Windows.Forms.RadioButton rbStartOfStream;
         private System.Windows.Forms.Button btnClear;
+        private System.Windows.Forms.NumericUpDown updownFrequency;
+        private System.Windows.Forms.Label label2;
     }
 }
 

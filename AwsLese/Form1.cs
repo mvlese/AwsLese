@@ -29,6 +29,8 @@ namespace AwsLese
         private Amazon.Runtime.AWSCredentials _credentials;
         private StreamConsumer<TPCorrelation> _tpCorrelationConsumer;
         private StreamConsumer<TPAverage> _tpAverageConsumer;
+        private DateTime _mostRecentTimestamp = DateTime.MinValue;
+        private DateTime _nextUpdateTimestamp = DateTime.MinValue;
 
         private BindingList<BindingList<double>> bindingList { get; set; } = new BindingList<BindingList<double>>();
         private BindingList<double> values1 { get; set; } = new BindingList<double>();
@@ -104,13 +106,16 @@ namespace AwsLese
             btnStop.Enabled = true;
             btnClear.Enabled = false;
 
+            _mostRecentTimestamp = DateTime.MinValue;
+            _nextUpdateTimestamp = DateTime.MinValue;
+
             ShardIteratorType iteratorType = ShardIteratorType.LATEST;
             if(rbStartOfStream.Checked)
             {
                 iteratorType = ShardIteratorType.TRIM_HORIZON;
             }
 
-            if (_tpCorrelationConsumer.ShardIteratorType != iteratorType)
+            if (_tpAverageConsumer.ShardIteratorType != iteratorType)
             {
                 Clear();
             }
@@ -144,6 +149,8 @@ namespace AwsLese
             values3.Clear();
             values2.Clear();
             values1.Clear();
+            _mostRecentTimestamp = DateTime.MinValue;
+            _nextUpdateTimestamp = DateTime.MinValue;
             handleValuesChanged();
         }
 
@@ -192,6 +199,8 @@ namespace AwsLese
 
                     TemperaturePressureScatterChart.Series[0].Points.DataBindXY(valuesAvg2, valuesAvg1);
                 }
+
+                lblMostRecentDataPointTs.Text = _mostRecentTimestamp.ToLocalTime().ToString("yyyy-MM-dd hh:mm:ss");
             };
 
             chart1.Invoke(x);
@@ -238,7 +247,7 @@ namespace AwsLese
             while (IsReading)
             {
                 BindingList<double> list = null;
-
+                bool hasData = false;
                 Thread.Sleep(1);
                 if (_dataQueue.Count > 0)
                 {
@@ -264,6 +273,11 @@ namespace AwsLese
                         }
                     }
 
+                    if (tpCorrelation.ts.HasValue && tpCorrelation.ts.Value > _mostRecentTimestamp)
+                    {
+                        _mostRecentTimestamp = tpCorrelation.ts.Value;
+                    }
+
                     if (list != null)
                     {
                         if (list.Count >= MaxChartItems)
@@ -271,16 +285,7 @@ namespace AwsLese
                             list.RemoveAt(0);
                         }
                         list.Add(tpCorrelation.correlation_coefficient.Value);
-                        handleValuesChanged();
-                    }
-
-                    if (tpCorrelation.ts.HasValue)
-                    {
-                        Action x = () =>
-                        {
-                            lblMostRecentDataPointTs.Text = tpCorrelation.ts.Value.ToLocalTime().ToString("yyyy-MM-dd hh:mm:ss");
-                        };
-                        lblMostRecentDataPointTs.Invoke(x);
+                        hasData = true;
                     }
                 }
 
@@ -309,6 +314,11 @@ namespace AwsLese
                         list = valuesAvg4;
                     }
 
+                    if (tpAverage.ts.HasValue && tpAverage.ts.Value > _mostRecentTimestamp)
+                    {
+                        _mostRecentTimestamp = tpAverage.ts.Value;
+                    }
+
                     if (list != null)
                     {
                         if (list.Count >= MaxChartItems)
@@ -316,8 +326,30 @@ namespace AwsLese
                             list.RemoveAt(0);
                         }
                         list.Add(tpAverage.average.Value);
-                        handleValuesChanged();
+                        hasData = true;
                     }
+
+                    if (hasData)
+                    {
+                        if (rbStartOfStream.Checked && updownFrequency.Value > 0)
+                        {
+                            if (_nextUpdateTimestamp == DateTime.MinValue)
+                            {
+                                _nextUpdateTimestamp = _mostRecentTimestamp.AddMinutes((int)updownFrequency.Value);
+                                handleValuesChanged();
+                            }
+                            else if (_mostRecentTimestamp > _nextUpdateTimestamp)
+                            {
+                                _nextUpdateTimestamp = _nextUpdateTimestamp.AddMinutes((int)updownFrequency.Value);
+                                handleValuesChanged();
+                            }
+                        }
+                        else
+                        {
+                            handleValuesChanged();
+                        }
+                    }
+
                 }
             }
         }
